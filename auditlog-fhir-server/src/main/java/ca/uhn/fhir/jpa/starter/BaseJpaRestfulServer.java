@@ -12,11 +12,7 @@ import ca.uhn.fhir.jpa.binstore.BinaryStorageInterceptor;
 import ca.uhn.fhir.jpa.bulk.BulkDataExportProvider;
 import ca.uhn.fhir.jpa.interceptor.CascadingDeleteInterceptor;
 import ca.uhn.fhir.jpa.partition.PartitionManagementProvider;
-import ca.uhn.fhir.jpa.provider.GraphQLProvider;
-import ca.uhn.fhir.jpa.provider.JpaConformanceProviderDstu2;
-import ca.uhn.fhir.jpa.provider.JpaSystemProviderDstu2;
-import ca.uhn.fhir.jpa.provider.SubscriptionTriggeringProvider;
-import ca.uhn.fhir.jpa.provider.TerminologyUploaderProvider;
+import ca.uhn.fhir.jpa.provider.*;
 import ca.uhn.fhir.jpa.provider.dstu3.JpaConformanceProviderDstu3;
 import ca.uhn.fhir.jpa.provider.dstu3.JpaSystemProviderDstu3;
 import ca.uhn.fhir.jpa.provider.r4.JpaConformanceProviderR4;
@@ -30,12 +26,8 @@ import ca.uhn.fhir.model.dstu2.composite.MetaDt;
 import ca.uhn.fhir.narrative.DefaultThymeleafNarrativeGenerator;
 import ca.uhn.fhir.rest.server.HardcodedServerAddressStrategy;
 import ca.uhn.fhir.rest.server.RestfulServer;
-import ca.uhn.fhir.rest.server.interceptor.CorsInterceptor;
-import ca.uhn.fhir.rest.server.interceptor.FhirPathFilterInterceptor;
-import ca.uhn.fhir.rest.server.interceptor.LoggingInterceptor;
-import ca.uhn.fhir.rest.server.interceptor.RequestValidatingInterceptor;
-import ca.uhn.fhir.rest.server.interceptor.ResponseHighlighterInterceptor;
-import ca.uhn.fhir.rest.server.interceptor.ResponseValidatingInterceptor;
+import ca.uhn.fhir.rest.server.interceptor.*;
+import ca.uhn.fhir.rest.server.interceptor.consent.ConsentInterceptor;
 import ca.uhn.fhir.rest.server.interceptor.partition.RequestTenantPartitionInterceptor;
 import ca.uhn.fhir.rest.server.tenant.UrlBaseTenantIdentificationStrategy;
 import ca.uhn.fhir.validation.IValidatorModule;
@@ -48,11 +40,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.cors.CorsConfiguration;
 
 import javax.servlet.ServletException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
 public class BaseJpaRestfulServer extends RestfulServer {
 
@@ -142,6 +130,15 @@ public class BaseJpaRestfulServer extends RestfulServer {
       } else {
         throw new IllegalStateException();
       }
+      
+
+      //Now register the consent interceptor
+      MyConsentService consentService = appCtx.getBean("myConsentService", MyConsentService.class);
+      ConsentInterceptor consentInterceptor = new ConsentInterceptor();
+      consentInterceptor.setConsentService(consentService);
+
+      registerInterceptor(consentInterceptor);
+
     }
 
     /*
@@ -332,6 +329,8 @@ public class BaseJpaRestfulServer extends RestfulServer {
       daoConfig.setResourceServerIdStrategy(DaoConfig.IdStrategyEnum.UUID);
       daoConfig.setResourceClientIdStrategy(HapiProperties.getClientIdStrategy());
     }
+
   }
+
 
 }

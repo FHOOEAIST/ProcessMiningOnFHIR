@@ -14,16 +14,10 @@ import org.jetbrains.annotations.NotNull;
 import javax.annotation.Nonnull;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Locale;
-import java.util.Properties;
-import java.util.Set;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.apache.commons.lang3.StringUtils.defaultString;
-import static org.apache.commons.lang3.StringUtils.isNotBlank;
-import static org.apache.commons.lang3.StringUtils.trim;
+import static org.apache.commons.lang3.StringUtils.*;
 
 public class HapiProperties {
   static final String ENABLE_INDEX_MISSING_FIELDS = "enable_index_missing_fields";
@@ -144,9 +138,9 @@ public class HapiProperties {
       properties.putAll(overrideProps);
     }
     properties.putAll(System.getenv().entrySet()
-                                     .stream()
-                                     .filter(e -> e.getValue() != null && properties.containsKey(e.getKey()))
-                                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+      .stream()
+      .filter(e -> e.getValue() != null && properties.containsKey(e.getKey()))
+      .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     return properties;
   }
 

@@ -28,8 +28,8 @@ public class ApplicationContext extends AnnotationConfigWebApplicationContext {
     }
 
     if (HapiProperties.getSubscriptionEmailEnabled()
-    || HapiProperties.getSubscriptionRestHookEnabled()
-    || HapiProperties.getSubscriptionWebsocketEnabled()) {
+      || HapiProperties.getSubscriptionRestHookEnabled()
+      || HapiProperties.getSubscriptionWebsocketEnabled()) {
       register(SubscriptionSubmitterConfig.class);
       register(SubscriptionProcessorConfig.class);
       register(SubscriptionChannelConfig.class);
