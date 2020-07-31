@@ -8,9 +8,9 @@ import ca.uhn.fhir.jpa.model.entity.ModelConfig;
 import ca.uhn.fhir.jpa.subscription.channel.subscription.SubscriptionDeliveryHandlerFactory;
 import ca.uhn.fhir.jpa.subscription.match.deliver.email.IEmailSender;
 import ca.uhn.fhir.jpa.subscription.match.deliver.email.JavaMailEmailSender;
+import ca.uhn.fhir.rest.server.interceptor.consent.IConsentService;
 import org.apache.commons.dbcp2.BasicDataSource;
 import org.hl7.fhir.dstu2.model.Subscription;
-import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -220,5 +220,11 @@ public class FhirServerConfigCommon {
     }
 
     return null;
+  }
+
+  //bean consent service - needed for creation of automated AuditEvent ressources for every operation
+  @Bean(name = "myConsentService")
+  IConsentService createMyConsentService() {
+    return new MyConsentService();
   }
 }
