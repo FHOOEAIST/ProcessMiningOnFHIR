@@ -1,21 +1,20 @@
 package ca.uhn.fhir.jpa.starter;
 
 import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
+import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
 import ca.uhn.fhir.rest.api.RequestTypeEnum;
+import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.interceptor.consent.ConsentOutcome;
 import ca.uhn.fhir.rest.server.interceptor.consent.IConsentContextServices;
 import ca.uhn.fhir.rest.server.interceptor.consent.IConsentService;
-import org.hl7.fhir.instance.model.api.IAnyResource;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.util.Arrays;
 import java.util.Date;
-import java.util.Map;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
 
 public class MyConsentService implements IConsentService {
 
@@ -30,7 +29,6 @@ public class MyConsentService implements IConsentService {
    */
   @Override
   public ConsentOutcome startOperation(RequestDetails theRequestDetails, IConsentContextServices theContextServices) {
-    //createAuditEvent(theRequestDetails);
     return ConsentOutcome.AUTHORIZED;
   }
 
@@ -70,20 +68,27 @@ public class MyConsentService implements IConsentService {
     auditEvent.addAgent(agentComponent);
 
     AuditEvent.AuditEventEntityComponent entityComponent = new AuditEvent.AuditEventEntityComponent();
-    //TODO: what if it was a query for not a specific resource?
-    entityComponent.setWhat(new Reference((IAnyResource) theRequestDetails.getResource()));
+    Reference referenceToSet = new Reference();
+    if ((theRequestDetails.getId()) == null ||
+      (theRequestDetails.getId()).isEmpty()) {
+      //not a specific resource
+      referenceToSet.setType(theRequestDetails.getResourceName());
+    } else {
+      // a specific instance
+      referenceToSet.setId(theRequestDetails.getId().getValue());
+    }
+    entityComponent.setWhat(referenceToSet);
 
-    //TODO: what if no parameters?
-    Base64BinaryType binaryTypeParameters = new Base64BinaryType();
-    //converting key value of map to a simple string
-    Map<String, String[]> parameters = theRequestDetails.getParameters();
-    binaryTypeParameters.setValueAsString(
-      parameters
-      .keySet().stream()
-      .map(key -> key + "=" + parameters.get(key).toString())
-      .collect(Collectors.joining("&", "?", "")));
-    entityComponent.setQueryElement(binaryTypeParameters);
 
+    String completeURL = theRequestDetails.getCompleteUrl();
+    if (completeURL.contains("?")) {
+      Base64BinaryType binaryTypeParameters = new Base64BinaryType();
+      //read only parameters part (everything after the "?") and base64 encode them
+      binaryTypeParameters.setValue(
+        completeURL.split("[?]")[1]
+          .getBytes());
+      entityComponent.setQueryElement(binaryTypeParameters);
+    }
 
     auditEvent.addEntity(entityComponent);
 
@@ -106,16 +111,30 @@ public class MyConsentService implements IConsentService {
       auditEvent.setOutcomeDesc(theException);
     }
 
-    Device thisSoftware = new Device();
-    Device.DeviceDeviceNameComponent deviceName = new Device.DeviceDeviceNameComponent();
-    deviceName.setName("Process mining AuditEvent FHIR Server");
-    thisSoftware.addDeviceName(deviceName);
-
-    myDeviceDao.create(thisSoftware);
+    //retrieve initially created device by using empty search parameter map
+    IBundleProvider allDevices = myDeviceDao.search(new SearchParameterMap());
+    Device thisSoftware;
+    if (allDevices != null && !allDevices.isEmpty() && allDevices.size() > 0) {
+      thisSoftware = (Device) allDevices.getResources(0, 1).get(0);
+    } else {
+      throw new ExceptionInInitializerError("Apparently no device has been created during initialization");
+    }
 
     AuditEvent.AuditEventSourceComponent sourceComponent = new AuditEvent.AuditEventSourceComponent();
     sourceComponent.setObserver(new Reference(thisSoftware));
 
+    auditEvent.setSource(sourceComponent);
+
     myAuditEventDao.create(auditEvent);
+  }
+
+  //Array toString with removed [brackets] so the result looks like: value1,value2,value3
+  private String toCommaSeparatedStringList(String[] theInputStringArray) {
+    if (theInputStringArray.length > 0) {
+      String commaSeparatedListWithBrackets = Arrays.toString(theInputStringArray);
+      return commaSeparatedListWithBrackets.substring(1, commaSeparatedListWithBrackets.length() - 1);
+    } else {
+      return "";
+    }
   }
 }
