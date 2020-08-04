@@ -16,9 +16,13 @@ public class JpaRestfulServer extends BaseJpaRestfulServer {
   protected void initialize() throws ServletException {
     super.initialize();
 
+    // Add your own customization here
+
+
     org.springframework.context.ApplicationContext appCtx = (ApplicationContext) getServletContext()
       .getAttribute("org.springframework.web.context.WebApplicationContext.ROOT");
 
+    //add device resource
     IFhirResourceDao<Device> deviceDao = appCtx.getBean("myDeviceDaoR4", IFhirResourceDao.class);
 
 
