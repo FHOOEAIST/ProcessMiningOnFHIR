@@ -24,6 +24,9 @@ public class MyConsentService implements IConsentService {
   @Autowired
   IFhirResourceDao<Device> myDeviceDao;
 
+  @Autowired
+  IFhirResourceDao<PlanDefinition> myPlanDefinitionDao;
+
   /**
    * Invoked once at the start of every request
    */
@@ -62,6 +65,21 @@ public class MyConsentService implements IConsentService {
     AuditEvent auditEvent = new AuditEvent();
     auditEvent.setType(new Coding("Query", "110112", "Audit event: Query has been made"));
     auditEvent.setRecorded(new Date());
+
+    //retrieve initially created plandefinition by using empty search parameter map
+    IBundleProvider allPlanDefinitions = myPlanDefinitionDao.search(new SearchParameterMap());
+    PlanDefinition initiallyCreatedPlanDefinition;
+    if (allPlanDefinitions != null && !allPlanDefinitions.isEmpty() && allPlanDefinitions.size() > 0) {
+      initiallyCreatedPlanDefinition = (PlanDefinition) allPlanDefinitions.getResources(0, 1).get(0);
+    } else {
+      throw new ExceptionInInitializerError("Apparently no plandefinition has been created during initialization");
+    }
+
+    //add based on extension
+    Extension basedOnExtension = new Extension();
+    basedOnExtension.setUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension");
+    basedOnExtension.setValue(new Reference(initiallyCreatedPlanDefinition));
+    auditEvent.addExtension(basedOnExtension);
 
     AuditEvent.AuditEventAgentComponent agentComponent = new AuditEvent.AuditEventAgentComponent();
     agentComponent.setRequestor(true);
