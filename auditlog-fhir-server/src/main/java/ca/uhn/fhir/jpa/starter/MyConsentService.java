@@ -63,7 +63,16 @@ public class MyConsentService implements IConsentService {
 
   private void createAuditEvent(RequestDetails theRequestDetails, boolean wasSuccessful, String theException) {
     AuditEvent auditEvent = new AuditEvent();
-    auditEvent.setType(new Coding("Query", "110112", "Audit event: Query has been made"));
+
+    //decide what type of auditevent it is and set type accordingly
+    if (theRequestDetails.getResourceName().equals("AuditEvent")) {
+      auditEvent.setType(new Coding("Audit Log Used", "110101", "Audit event: Audit Log has been used"));
+    } else if (theRequestDetails.getResourceName().equals("Patient")) {
+      auditEvent.setType(new Coding("Patient Record", "110110", "Audit event: Patient Record has been created, read, updated, or deleted"));
+    } else {
+      auditEvent.setType(new Coding("Query", "110112", "Audit event: Query has been made"));
+    }
+    
     auditEvent.setRecorded(new Date());
 
     //retrieve initially created plandefinition by using empty search parameter map
