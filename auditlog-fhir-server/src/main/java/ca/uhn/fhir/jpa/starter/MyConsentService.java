@@ -72,7 +72,7 @@ public class MyConsentService implements IConsentService {
     } else {
       auditEvent.setType(new Coding("Query", "110112", "Audit event: Query has been made"));
     }
-    
+
     auditEvent.setRecorded(new Date());
 
     //retrieve initially created plandefinition by using empty search parameter map
@@ -155,13 +155,5 @@ public class MyConsentService implements IConsentService {
     myAuditEventDao.create(auditEvent);
   }
 
-  //Array toString with removed [brackets] so the result looks like: value1,value2,value3
-  private String toCommaSeparatedStringList(String[] theInputStringArray) {
-    if (theInputStringArray.length > 0) {
-      String commaSeparatedListWithBrackets = Arrays.toString(theInputStringArray);
-      return commaSeparatedListWithBrackets.substring(1, commaSeparatedListWithBrackets.length() - 1);
-    } else {
-      return "";
-    }
-  }
+  
 }
