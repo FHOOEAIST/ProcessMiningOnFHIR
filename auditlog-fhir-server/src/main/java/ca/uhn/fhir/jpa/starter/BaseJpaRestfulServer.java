@@ -94,6 +94,7 @@ public class BaseJpaRestfulServer extends RestfulServer {
     setFhirContext(appCtx.getBean(FhirContext.class));
 
     registerProviders(resourceProviders.createProviders());
+    registerProvider(appCtx.getBean("xesOperations", XESProvider.class));
     registerProvider(appCtx.getBean("fhirToCDA", CDAProvider.class));
     registerProvider(systemProvider);
 
