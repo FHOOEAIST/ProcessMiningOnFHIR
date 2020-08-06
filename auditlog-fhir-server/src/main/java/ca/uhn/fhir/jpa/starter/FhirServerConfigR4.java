@@ -60,4 +60,9 @@ public class FhirServerConfigR4 extends BaseJavaConfigR4 {
   }
 
 
+  @Bean(name = "xesOperations")
+  public XESProvider xesProvider(){
+    return new XESProvider();
+  }
+
 }
