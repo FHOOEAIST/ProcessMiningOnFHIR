@@ -9,7 +9,6 @@ import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.interceptor.consent.ConsentOutcome;
 import ca.uhn.fhir.rest.server.interceptor.consent.IConsentContextServices;
 import ca.uhn.fhir.rest.server.interceptor.consent.IConsentService;
-import org.apache.commons.lang3.NotImplementedException;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +25,9 @@ public class MyConsentService implements IConsentService {
 
   @Autowired
   IFhirResourceDao<PlanDefinition> myPlanDefinitionDao;
+
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MyConsentService.class);
+
 
   /**
    * Invoked once at the start of every request
@@ -100,7 +102,7 @@ public class MyConsentService implements IConsentService {
       roleType.addCoding(new Coding("http://terminology.hl7.org/CodeSystem/v3-RoleClass", "PAT", "patient"));
       agentComponent.addRole(roleType);
     } catch (Exception e) {
-      System.out.println(e);
+      logger.error(e.getMessage());
     }
 
     auditEvent.addAgent(agentComponent);
@@ -168,7 +170,7 @@ public class MyConsentService implements IConsentService {
 
   //retrieve the first subject reference id (patient id) of a resource (not exhaustive, only for resources of the tested radiological workflow)
   private String retrieveSubjectIdOrPatientId(RequestDetails theRequestDetails) {
-    //TODO: figure out how to transer caseId for the operation  http://endpoint/DiagnosticReport/$DiagnosticReportId/$fhirToCDA
+    //TODO: figure out how to transfer caseId for the operation  http://endpoint/DiagnosticReport/$DiagnosticReportId/$fhirToCDA
 
     // GET request
     if (theRequestDetails.getRequestType().equals("GET")) {
@@ -177,17 +179,14 @@ public class MyConsentService implements IConsentService {
         !theRequestDetails.getParameters().isEmpty() &&
         theRequestDetails.getParameters().get("subject") != null) {
         return theRequestDetails.getParameters().get("subject")[0];
-        //GET request that contains a patient's id
-      } else if (theRequestDetails.getResourceName().equals("Patient") &&
-        theRequestDetails.getId() != null &&
-        theRequestDetails.getId().getValue() != null &&
-        !theRequestDetails.getId().getValue().isEmpty()) {
-        return theRequestDetails.getId().getValue();
       }
     }
 
     //PUT, POST, DELETE... or even GET request as long as it does not contain a parameter "subject"
-    if (theRequestDetails.getResourceName().equals("Patient")) {
+    if ((theRequestDetails.getResourceName().equals("Patient")) &&
+      theRequestDetails.getId() != null &&
+      theRequestDetails.getId().getValue() != null &&
+      !theRequestDetails.getId().getValue().isEmpty()) {
       return theRequestDetails.getId().getValue();
     } else if (theRequestDetails.getResourceName().equals("Appointment")) {
       Appointment appointment = (Appointment) theRequestDetails.getResource();
@@ -201,8 +200,11 @@ public class MyConsentService implements IConsentService {
     } else if (theRequestDetails.getResourceName().equals("DiagnosticReport")) {
       DiagnosticReport diagnosticReport = (DiagnosticReport) theRequestDetails.getResource();
       return diagnosticReport.getSubject().getReference();
+    } else if (theRequestDetails.getResourceName().equals("AuditEvent")) {
+      //nothing. there is no need to retrieve a subject for auditevents. also, an auditevent does not have a subject
+      return null;
     } else {
-      throw new NotImplementedException("There is no existing implementation yet to retrieve a subject for the resource " + theRequestDetails.getResourceName() + ".");
+      throw new UnsupportedOperationException("There is no existing implementation yet to retrieve a subject for the resource " + theRequestDetails.getResourceName() + ".");
     }
   }
 }
