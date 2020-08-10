@@ -54,4 +54,10 @@ public class FhirServerConfigR4 extends BaseJavaConfigR4 {
     return retVal;
   }
 
+  @Bean(name = "fhirToCDA")
+  public CDAProvider cdaProvider() {
+    return new CDAProvider();
+  }
+
+
 }

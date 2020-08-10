@@ -94,6 +94,7 @@ public class BaseJpaRestfulServer extends RestfulServer {
     setFhirContext(appCtx.getBean(FhirContext.class));
 
     registerProviders(resourceProviders.createProviders());
+    registerProvider(appCtx.getBean("fhirToCDA", CDAProvider.class));
     registerProvider(systemProvider);
 
     /*
@@ -130,7 +131,7 @@ public class BaseJpaRestfulServer extends RestfulServer {
       } else {
         throw new IllegalStateException();
       }
-      
+
 
       //Now register the consent interceptor
       MyConsentService consentService = appCtx.getBean("myConsentService", MyConsentService.class);
