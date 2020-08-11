@@ -24,7 +24,7 @@ public class MyConsentService implements IConsentService {
   IFhirResourceDao<Device> myDeviceDao;
 
   @Autowired
-  IFhirResourceDao<PlanDefinition> myPlanDefinitionDao;
+  IFhirResourceDao<DiagnosticReport> myDiagnosticReportDao;
 
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MyConsentService.class);
 
@@ -77,34 +77,14 @@ public class MyConsentService implements IConsentService {
 
     auditEvent.setRecorded(new Date());
 
-    //retrieve initially created plandefinition by using empty search parameter map
-    IBundleProvider allPlanDefinitions = myPlanDefinitionDao.search(new SearchParameterMap());
-    PlanDefinition initiallyCreatedPlanDefinition;
-    if (allPlanDefinitions != null && !allPlanDefinitions.isEmpty() && allPlanDefinitions.size() > 0) {
-      initiallyCreatedPlanDefinition = (PlanDefinition) allPlanDefinitions.getResources(0, 1).get(0);
-    } else {
-      throw new ExceptionInInitializerError("Apparently no plandefinition has been created during initialization");
-    }
-
     //add based on extension
     Extension basedOnExtension = new Extension();
     basedOnExtension.setUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension");
-    basedOnExtension.setValue(new Reference(initiallyCreatedPlanDefinition));
+    basedOnExtension.setValue(retrieveEncounterId(theRequestDetails));
     auditEvent.addExtension(basedOnExtension);
 
     AuditEvent.AuditEventAgentComponent agentComponent = new AuditEvent.AuditEventAgentComponent();
     agentComponent.setRequestor(false);
-
-    //set who
-    try {
-      agentComponent.setWho(new Reference(retrieveSubjectIdOrPatientId(theRequestDetails)));
-      CodeableConcept roleType = new CodeableConcept();
-      roleType.addCoding(new Coding("http://terminology.hl7.org/CodeSystem/v3-RoleClass", "PAT", "patient"));
-      agentComponent.addRole(roleType);
-    } catch (Exception e) {
-      logger.error(e.getMessage());
-    }
-
     auditEvent.addAgent(agentComponent);
 
     AuditEvent.AuditEventEntityComponent entityComponent = new AuditEvent.AuditEventEntityComponent();
@@ -176,43 +156,41 @@ public class MyConsentService implements IConsentService {
     myAuditEventDao.create(auditEvent);
   }
 
-  //retrieve the first subject reference id (patient id) of a resource (not exhaustive, only for resources of the tested radiological workflow)
-  private String retrieveSubjectIdOrPatientId(RequestDetails theRequestDetails) {
-    //TODO: figure out how to transfer caseId for the operation  http://endpoint/DiagnosticReport/$DiagnosticReportId/$fhirToCDA
-
-    // GET request
-    if (theRequestDetails.getRequestType().equals("GET")) {
-      //GET request that contains a subject parameter
-      if (theRequestDetails.getParameters() != null &&
-        !theRequestDetails.getParameters().isEmpty() &&
-        theRequestDetails.getParameters().get("subject") != null) {
-        return theRequestDetails.getParameters().get("subject")[0];
-      }
-    }
-
-    //PUT, POST, DELETE... or even GET request as long as it does not contain a parameter "subject"
-    if ((theRequestDetails.getResourceName().equals("Patient")) &&
+  //retrieve the encounter id of a resource (not exhaustive, only for resources of the tested radiological workflow)
+  private Reference retrieveEncounterId(RequestDetails theRequestDetails) {
+    //DiagnosticReport operation
+    if (theRequestDetails.getRequestType().equals(RequestTypeEnum.GET) &&
+      theRequestDetails.getOperation() != null &&
+      !theRequestDetails.getOperation().isEmpty() &&
+      theRequestDetails.getResourceName().equals("DiagnosticReport") &&
       theRequestDetails.getId() != null &&
-      theRequestDetails.getId().getValue() != null &&
-      !theRequestDetails.getId().getValue().isEmpty()) {
-      return theRequestDetails.getId().getValue();
+      !theRequestDetails.getId().isEmpty()) {
+
+      DiagnosticReport diagnosticReport = myDiagnosticReportDao.read(theRequestDetails.getId());
+      return diagnosticReport.getEncounter();
     } else if (theRequestDetails.getResourceName().equals("Appointment")) {
       Appointment appointment = (Appointment) theRequestDetails.getResource();
-      return appointment.getParticipantFirstRep().getActor().getReference();
+      Extension encounterExtension = appointment.getExtensionByUrl("http://aist.fh-hagenberg.at/fhir/extensions/appointment-encounter-extension");
+      return (Reference) encounterExtension.getValue();
     } else if (theRequestDetails.getResourceName().equals("Procedure")) {
       Procedure procedure = (Procedure) theRequestDetails.getResource();
-      return procedure.getSubject().getReference();
+      return procedure.getEncounter();
     } else if (theRequestDetails.getResourceName().equals("Media")) {
       Media media = (Media) theRequestDetails.getResource();
-      return media.getSubject().getReference();
+      return media.getEncounter();
+      //this is executed, if it is not a GET request with an operation on a specific DiagnosticReport but any other manipulation or usage of this resource
     } else if (theRequestDetails.getResourceName().equals("DiagnosticReport")) {
       DiagnosticReport diagnosticReport = (DiagnosticReport) theRequestDetails.getResource();
-      return diagnosticReport.getSubject().getReference();
-    } else if (theRequestDetails.getResourceName().equals("AuditEvent")) {
-      //nothing. there is no need to retrieve a subject for auditevents. also, an auditevent does not have a subject
+      return diagnosticReport.getEncounter();
+    } else if (
+      theRequestDetails.getResourceName().equals("AuditEvent") ||
+      theRequestDetails.getResourceName().equals("Patient") ||
+      theRequestDetails.getResourceName().equals("Encounter")
+    ) {
+      //nothing. there is no need to retrieve an encounterId for auditevents. patients or encounters. also, these resources do ned have an encounter element
       return null;
     } else {
-      throw new UnsupportedOperationException("There is no existing implementation yet to retrieve a subject for the resource " + theRequestDetails.getResourceName() + ".");
+      throw new UnsupportedOperationException("There is no existing implementation yet to retrieve an encounter reference for the resource " + theRequestDetails.getResourceName() + ".");
     }
   }
 }
