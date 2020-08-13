@@ -39,19 +39,6 @@ public class XESProvider implements IResourceProvider {
   IFhirResourceDao<PlanDefinition> myPlanDefinitionDao;
 
   /**
-   * Returns a bundle with the given request no clue yet how that works without a XES resource
-   *
-   * @throws IOException
-   */
-  @Operation(name = "$bundleXes", idempotent = true)
-  public Bundle patientTypeOperation() {
-
-    Bundle retVal = new Bundle();
-    // Populate bundle with matching resources
-    return retVal;
-  }
-
-  /**
    * Returns XES with the given request
    *
    * @param theServletRequest  request from client
@@ -89,7 +76,6 @@ public class XESProvider implements IResourceProvider {
           ("PlanDefinition/2".equals(((Reference) event.getExtensionByUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension").getValue()).getReference()))) {
           AuditEvent.AuditEventAgentComponent agent = event.getAgent() != null && !event.getAgent().isEmpty() ? event.getAgent().get(0) : null;
           String caseId = agent != null && agent.getWho() != null ? agent.getWho().getReference() : null;
-          // TODO Most AuditEvents can't actually be related to a patient that way;
           if (!tracesPerPatient.containsKey(caseId)) {
             tracesPerPatient.put(caseId, new LinkedList<>());
           }
