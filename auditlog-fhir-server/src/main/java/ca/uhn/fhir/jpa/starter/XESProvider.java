@@ -7,7 +7,10 @@ import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import com.github.dnault.xmlpatch.repackaged.org.apache.commons.io.IOUtils;
 import org.hl7.fhir.instance.model.api.IBaseResource;
-import org.hl7.fhir.r4.model.*;
+import org.hl7.fhir.r4.model.AuditEvent;
+import org.hl7.fhir.r4.model.Device;
+import org.hl7.fhir.r4.model.PlanDefinition;
+import org.hl7.fhir.r4.model.Reference;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.servlet.http.HttpServletRequest;
@@ -72,10 +75,9 @@ public class XESProvider implements IResourceProvider {
       if (x != null && x instanceof AuditEvent) {
         AuditEvent event = (AuditEvent) x;
         // NOTE: Currently we only accept The Radiology Workflow
+        String caseId;
         if (event.hasExtension("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension") &&
-          ("PlanDefinition/2".equals(((Reference) event.getExtensionByUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension").getValue()).getReference()))) {
-          AuditEvent.AuditEventAgentComponent agent = event.getAgent() != null && !event.getAgent().isEmpty() ? event.getAgent().get(0) : null;
-          String caseId = agent != null && agent.getWho() != null ? agent.getWho().getReference() : null;
+          (caseId = ((Reference) event.getExtensionByUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension").getValue()).getReference()) != null) {
           if (!tracesPerPatient.containsKey(caseId)) {
             tracesPerPatient.put(caseId, new LinkedList<>());
           }
