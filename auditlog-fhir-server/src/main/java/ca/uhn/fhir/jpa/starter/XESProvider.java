@@ -5,7 +5,6 @@ import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.server.IResourceProvider;
-import com.github.dnault.xmlpatch.repackaged.org.apache.commons.io.IOUtils;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.AuditEvent;
 import org.hl7.fhir.r4.model.Device;
@@ -50,9 +49,6 @@ public class XESProvider implements IResourceProvider {
    */
   @Operation(name = "$xes", manualResponse = true, manualRequest = true, idempotent = true)
   public void xesTypeOperation(HttpServletRequest theServletRequest, HttpServletResponse theServletResponse) throws IOException {
-    String contentType = theServletRequest.getContentType();
-    byte[] bytes = IOUtils.toByteArray(theServletRequest.getInputStream());
-
     theServletResponse.setContentType("text/plain");
 
     theServletResponse.getWriter().write(generateXES());
@@ -72,7 +68,7 @@ public class XESProvider implements IResourceProvider {
     IBundleProvider search = myAuditEventDao.search(SearchParameterMap.newSynchronous());
     List<IBaseResource> resources = search.getResources(0, search.size());
     resources.forEach(x -> {
-      if (x != null && x instanceof AuditEvent) {
+      if (x instanceof AuditEvent) {
         AuditEvent event = (AuditEvent) x;
         // NOTE: Currently we only accept The Radiology Workflow
         String caseId;
@@ -177,14 +173,12 @@ public class XESProvider implements IResourceProvider {
         }
         break;
       case "E":
-        switch (x.getEntityFirstRep().getDetailFirstRep().getValue().toString()) {
-          case "*$fhirToCDA":
+        if (x.getEntityFirstRep().getDetailFirstRep().getValue().toString().endsWith("$fhirToCDA")) {
             event = "<event>\n" +
               "\t\t\t<string key=\"concept:name\" value=\"Report Transmission\"/>\n" +
               "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
               "\t\t\t<date key=\"time:timestamp\" value=\"" + x.getRecorded().toString() + "\"/>\n" +
               "\t\t</event>";
-            break;
         }
         break;
     }
