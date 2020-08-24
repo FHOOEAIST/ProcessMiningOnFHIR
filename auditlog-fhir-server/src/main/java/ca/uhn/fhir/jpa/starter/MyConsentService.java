@@ -13,7 +13,6 @@ import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.util.Arrays;
 import java.util.Date;
 
 public class MyConsentService implements IConsentService {
@@ -26,6 +25,9 @@ public class MyConsentService implements IConsentService {
 
   @Autowired
   IFhirResourceDao<DiagnosticReport> myDiagnosticReportDao;
+
+  @Autowired
+  IFhirResourceDao<PlanDefinition> myPlanDefinitionDao;
 
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MyConsentService.class);
 
@@ -78,11 +80,28 @@ public class MyConsentService implements IConsentService {
 
     auditEvent.setRecorded(new Date());
 
-    //add based on extension
+    //add based on extension for encounter
     Extension basedOnExtension = new Extension();
     basedOnExtension.setUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension");
     basedOnExtension.setValue(retrieveEncounterId(theRequestDetails));
     auditEvent.addExtension(basedOnExtension);
+
+
+    //retrieve initially created plandefinition by using empty search parameter map
+    IBundleProvider allPlanDefinitions = myPlanDefinitionDao.search(new SearchParameterMap());
+    PlanDefinition initiallyCreatedPlanDefinition = null;
+    if (allPlanDefinitions != null && !allPlanDefinitions.isEmpty() && allPlanDefinitions.size() > 0) {
+      initiallyCreatedPlanDefinition = (PlanDefinition) allPlanDefinitions.getResources(0, 1).get(0);
+    } else {
+      logger.error("Apparently no plandefinition has been created during initialization");
+    }
+
+    //add based on extension for plandefinition
+    Extension basedOnExtensionPlanDefinition = new Extension();
+    basedOnExtensionPlanDefinition.setUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension");
+    basedOnExtensionPlanDefinition.setValue(new Reference(initiallyCreatedPlanDefinition));
+    auditEvent.addExtension(basedOnExtensionPlanDefinition);
+
 
     AuditEvent.AuditEventAgentComponent agentComponent = new AuditEvent.AuditEventAgentComponent();
     agentComponent.setRequestor(false);
@@ -185,8 +204,8 @@ public class MyConsentService implements IConsentService {
       return diagnosticReport.getEncounter();
     } else if (
       theRequestDetails.getResourceName().equals("AuditEvent") ||
-      theRequestDetails.getResourceName().equals("Patient") ||
-      theRequestDetails.getResourceName().equals("Encounter")
+        theRequestDetails.getResourceName().equals("Patient") ||
+        theRequestDetails.getResourceName().equals("Encounter")
     ) {
       //nothing. there is no need to retrieve an encounterId for auditevents. patients or encounters. also, these resources do ned have an encounter element
       return null;
