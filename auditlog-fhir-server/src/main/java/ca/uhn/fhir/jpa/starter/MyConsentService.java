@@ -80,9 +80,10 @@ public class MyConsentService implements IConsentService {
 
     auditEvent.setRecorded(new Date());
 
+    String basedOnURL = "https://fhirserver.com/extensions/auditevent-basedon";
     //add based on extension for encounter
     Extension basedOnExtension = new Extension();
-    basedOnExtension.setUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension");
+    basedOnExtension.setUrl(basedOnURL);
     basedOnExtension.setValue(retrieveEncounterId(theRequestDetails));
     auditEvent.addExtension(basedOnExtension);
 
@@ -98,7 +99,7 @@ public class MyConsentService implements IConsentService {
 
     //add based on extension for plandefinition
     Extension basedOnExtensionPlanDefinition = new Extension();
-    basedOnExtensionPlanDefinition.setUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension");
+    basedOnExtensionPlanDefinition.setUrl(basedOnURL);
     basedOnExtensionPlanDefinition.setValue(new Reference(initiallyCreatedPlanDefinition));
     auditEvent.addExtension(basedOnExtensionPlanDefinition);
 
