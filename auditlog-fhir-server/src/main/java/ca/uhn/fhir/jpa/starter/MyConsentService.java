@@ -131,11 +131,10 @@ public class MyConsentService implements IConsentService {
       entityComponent.setQueryElement(binaryTypeParameters);
     }
 
-    AuditEvent.AuditEventEntityDetailComponent details = new AuditEvent.AuditEventEntityDetailComponent();
-    details.setType("FullURL");
-    details.setValue(new StringType(completeURL));
-    entityComponent.addDetail(details);
-
+    AuditEvent.AuditEventEntityDetailComponent detailsRequested = new AuditEvent.AuditEventEntityDetailComponent();
+    detailsRequested.setType("RequestedURL");
+    detailsRequested.setValue(new StringType(completeURL));
+    entityComponent.addDetail(detailsRequested);
 
     auditEvent.addEntity(entityComponent);
 
