@@ -80,12 +80,12 @@ public class MyConsentService implements IConsentService {
 
     auditEvent.setRecorded(new Date());
 
-    String basedOnURL = "https://fhirserver.com/extensions/auditevent-basedon";
+    String encounterURL = "https://fhirserver.com/extensions/auditevent-encounter";
     //add based on extension for encounter
-    Extension basedOnExtension = new Extension();
-    basedOnExtension.setUrl(basedOnURL);
-    basedOnExtension.setValue(retrieveEncounterId(theRequestDetails));
-    auditEvent.addExtension(basedOnExtension);
+    Extension encounterExtension = new Extension();
+    encounterExtension.setUrl(encounterURL);
+    encounterExtension.setValue(retrieveEncounterId(theRequestDetails));
+    auditEvent.addExtension(encounterExtension);
 
 
     //retrieve initially created plandefinition by using empty search parameter map
@@ -98,6 +98,7 @@ public class MyConsentService implements IConsentService {
     }
 
     //add based on extension for plandefinition
+    String basedOnURL = "https://fhirserver.com/extensions/auditevent-basedon";
     Extension basedOnExtensionPlanDefinition = new Extension();
     basedOnExtensionPlanDefinition.setUrl(basedOnURL);
     basedOnExtensionPlanDefinition.setValue(new Reference(initiallyCreatedPlanDefinition));
