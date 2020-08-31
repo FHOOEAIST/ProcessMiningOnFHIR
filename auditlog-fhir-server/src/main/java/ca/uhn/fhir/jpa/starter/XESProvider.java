@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -39,6 +41,8 @@ public class XESProvider implements IResourceProvider {
 
   @Autowired
   IFhirResourceDao<PlanDefinition> myPlanDefinitionDao;
+
+  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MyConsentService.class);
 
   /**
    * Returns XES with the given request
@@ -65,6 +69,16 @@ public class XESProvider implements IResourceProvider {
 
     Map<String, List<AuditEvent>> tracesPerPatient = new HashMap<>();
 
+    //retrieve initially created plandefinition by using empty search parameter map
+    IBundleProvider allPlanDefinitions = myPlanDefinitionDao.search(new SearchParameterMap());
+    final PlanDefinition initiallyCreatedPlanDefinition;
+    if (allPlanDefinitions != null && !allPlanDefinitions.isEmpty() && allPlanDefinitions.size() > 0) {
+      initiallyCreatedPlanDefinition = (PlanDefinition) allPlanDefinitions.getResources(0, 1).get(0);
+    } else {
+      logger.error("Apparently no plandefinition has been created during initialization");
+      return "No Plan Definition found!";
+    }
+
     IBundleProvider search = myAuditEventDao.search(SearchParameterMap.newSynchronous());
     List<IBaseResource> resources = search.getResources(0, search.size());
     resources.forEach(x -> {
@@ -72,8 +86,11 @@ public class XESProvider implements IResourceProvider {
         AuditEvent event = (AuditEvent) x;
         // NOTE: Currently we only accept The Radiology Workflow
         String caseId;
-        if (event.hasExtension("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension") &&
-          (caseId = ((Reference) event.getExtensionByUrl("http://aist.fh-hagenberg.at/fhir/extensions/auditevent-basedon-extension").getValue()).getReference()) != null) {
+        if (
+          event.hasExtension("https://fhirserver.com/extensions/auditevent-basedon") &&
+            ((Reference)event.getExtensionByUrl("https://fhirserver.com/extensions/auditevent-basedon").getValue()).getReference().equals("PlanDefinition/"+initiallyCreatedPlanDefinition.getIdElement().getIdPart()) &&
+          event.hasExtension("https://fhirserver.com/extensions/auditevent-encounter") &&
+          (caseId = ((Reference) event.getExtensionByUrl("https://fhirserver.com/extensions/auditevent-encounter").getValue()).getReference()) != null) {
           if (!tracesPerPatient.containsKey(caseId)) {
             tracesPerPatient.put(caseId, new LinkedList<>());
           }
@@ -86,13 +103,13 @@ public class XESProvider implements IResourceProvider {
 
     return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" +
       "\n" +
-      "<log xes.version=\"1.0\" xes.features=\"nested-attributes\" openxes.version=\"1.0RC7\" xmlns=\"http://www.xes-standard.org/\">\n" +
+      "<log xes.version=\"1.0\" xes.features=\"\" openxes.version=\"1.0RC7\" xmlns=\"http://www.xes-standard.org/\">\n" +
       "\t<extension name=\"Organizational\" prefix=\"org\" uri=\"http://www.xes-standard.org/org.xesext\"/>\n" +
       "\t<extension name=\"Time\" prefix=\"time\" uri=\"http://www.xes-standard.org/time.xesext\"/>\n" +
       "\t<extension name=\"Lifecycle\" prefix=\"lifecycle\" uri=\"http://www.xes-standard.org/lifecycle.xesext\"/>\n" +
       "\t<extension name=\"Concept\" prefix=\"concept\" uri=\"http://www.xes-standard.org/concept.xesext\"/>\n" +
       "\n" +
-      "\t<string key=\"concept:name\" value=\"Radiology Workflow\"/>\n" +
+      "\t<string key=\"concept:name\" value=\"PlanDefinition/"+initiallyCreatedPlanDefinition.getIdElement().getIdPart()+"\"/>\n" +
       "\n" +
       tracesPerPatient.entrySet().stream().map(x -> trace(x.getKey(), x.getValue())).collect(Collectors.joining("\n")) +
       "</log>\n";
@@ -108,7 +125,7 @@ public class XESProvider implements IResourceProvider {
   private String trace(String caseId, List<AuditEvent> events) {
     return "\t<trace>\n" +
       "\t\t<string key=\"concept:name\" value=\"" + caseId + "\"/>\n" +
-      events.stream().map(x -> mapEvent(x)).collect(Collectors.joining("\n")) +
+      events.stream().map(this::mapEvent).collect(Collectors.joining("\n")) +
       "\t</trace>\n\n";
   }
 
@@ -125,24 +142,24 @@ public class XESProvider implements IResourceProvider {
       case "C":
         switch (x.getEntityFirstRep().getWhat().getType()) {
           case "Appointment":
-            event = "<event>\n" +
+            event = "\t\t<event>\n" +
               "\t\t\t<string key=\"concept:name\" value=\"Schedule Appointment\"/>\n" +
               "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
-              "\t\t\t<date key=\"time:timestamp\" value=\"" + x.getRecorded().toString() + "\"/>\n" +
+              "\t\t\t<date key=\"time:timestamp\" value=\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(x.getRecorded().toInstant().atZone(ZoneId.systemDefault())) + "\"/>\n" +
               "\t\t</event>";
             break;
           case "Media":
-            event = "<event>\n" +
+            event = "\t\t<event>\n" +
               "\t\t\t<string key=\"concept:name\" value=\"Diagnosis\"/>\n" +
               "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
-              "\t\t\t<date key=\"time:timestamp\" value=\"" + x.getRecorded().toString() + "\"/>\n" +
+              "\t\t\t<date key=\"time:timestamp\" value=\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(x.getRecorded().toInstant().atZone(ZoneId.systemDefault())) + "\"/>\n" +
               "\t\t</event>";
             break;
           case "DiagnosticReport":
-            event = "<event>\n" +
+            event = "\t\t<event>\n" +
               "\t\t\t<string key=\"concept:name\" value=\"Report Writing\"/>\n" +
               "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
-              "\t\t\t<date key=\"time:timestamp\" value=\"" + x.getRecorded().toString() + "\"/>\n" +
+              "\t\t\t<date key=\"time:timestamp\" value=\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(x.getRecorded().toInstant().atZone(ZoneId.systemDefault())) + "\"/>\n" +
               "\t\t</event>";
             break;
         }
@@ -150,34 +167,34 @@ public class XESProvider implements IResourceProvider {
       case "U":
         switch (x.getEntityFirstRep().getWhat().getType()) {
           case "Appointment":
-            event = "<event>\n" +
+            event = "\t\t<event>\n" +
               "\t\t\t<string key=\"concept:name\" value=\"Patient Admission\"/>\n" +
               "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
-              "\t\t\t<date key=\"time:timestamp\" value=\"" + x.getRecorded().toString() + "\"/>\n" +
+              "\t\t\t<date key=\"time:timestamp\" value=\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(x.getRecorded().toInstant().atZone(ZoneId.systemDefault())) + "\"/>\n" +
               "\t\t</event>";
             break;
           case "Procedure":
-            event = "<event>\n" +
+            event = "\t\t<event>\n" +
               "\t\t\t<string key=\"concept:name\" value=\"Radiological Examination\"/>\n" +
               "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
-              "\t\t\t<date key=\"time:timestamp\" value=\"" + x.getRecorded().toString() + "\"/>\n" +
+              "\t\t\t<date key=\"time:timestamp\" value=\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(x.getRecorded().toInstant().atZone(ZoneId.systemDefault())) + "\"/>\n" +
               "\t\t</event>";
             break;
           case "DiagnosticReport":
-            event = "<event>\n" +
+            event = "\t\t<event>\n" +
               "\t\t\t<string key=\"concept:name\" value=\"Report Attestation\"/>\n" +
               "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
-              "\t\t\t<date key=\"time:timestamp\" value=\"" + x.getRecorded().toString() + "\"/>\n" +
+              "\t\t\t<date key=\"time:timestamp\" value=\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(x.getRecorded().toInstant().atZone(ZoneId.systemDefault())) + "\"/>\n" +
               "\t\t</event>";
             break;
         }
         break;
       case "E":
         if (x.getEntityFirstRep().getDetailFirstRep().getValue().toString().endsWith("$fhirToCDA")) {
-            event = "<event>\n" +
+            event = "\t\t<event>\n" +
               "\t\t\t<string key=\"concept:name\" value=\"Report Transmission\"/>\n" +
               "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
-              "\t\t\t<date key=\"time:timestamp\" value=\"" + x.getRecorded().toString() + "\"/>\n" +
+              "\t\t\t<date key=\"time:timestamp\" value=\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(x.getRecorded().toInstant().atZone(ZoneId.systemDefault())) + "\"/>\n" +
               "\t\t</event>";
         }
         break;
