@@ -35,10 +35,11 @@ public class JpaRestfulServer extends BaseJpaRestfulServer {
     IFhirResourceDao<PlanDefinition> planDefDao = appCtx.getBean("myPlanDefinitionDaoR4", IFhirResourceDao.class);
 
     PlanDefinition planDefinition = new PlanDefinition();
+    planDefinition.setId("rad-wf");
     planDefinition.setStatus(Enumerations.PublicationStatus.ACTIVE);
-    planDefinition.setDescription("Very detailed PlanDefinition that defines to do something");
+    planDefinition.setDescription("PlanDefinition of the radiology practice workflow");
 
-    planDefDao.create(planDefinition);
+    planDefDao.update(planDefinition);
 
 
   }
