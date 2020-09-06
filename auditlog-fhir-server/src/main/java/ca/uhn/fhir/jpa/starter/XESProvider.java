@@ -3,16 +3,15 @@ package ca.uhn.fhir.jpa.starter;
 import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
 import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
 import ca.uhn.fhir.rest.annotation.Operation;
+import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
+import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.AuditEvent;
-import org.hl7.fhir.r4.model.Device;
-import org.hl7.fhir.r4.model.PlanDefinition;
 import org.hl7.fhir.r4.model.Reference;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.ZoneId;
@@ -36,27 +35,30 @@ public class XESProvider implements IResourceProvider {
   @Autowired
   IFhirResourceDao<AuditEvent> myAuditEventDao;
 
-  @Autowired
-  IFhirResourceDao<Device> myDeviceDao;
-
-  @Autowired
-  IFhirResourceDao<PlanDefinition> myPlanDefinitionDao;
-
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MyConsentService.class);
 
   /**
    * Returns XES with the given request
    *
-   * @param theServletRequest  request from client
-   * @param theServletResponse XES data as response
+   * @param thePlandefinitionReference reference to plandefinition which is used to retrieve a list of AudtEvents
+   * @param theServletResponse         XES data as response
    * @throws IOException
    */
   @Operation(name = "$xes", manualResponse = true, manualRequest = true, idempotent = true)
-  public void xesTypeOperation(HttpServletRequest theServletRequest, HttpServletResponse theServletResponse) throws IOException {
-    theServletResponse.setContentType("text/plain");
+  public void xesTypeOperation(@OperationParam(name = "plandefinition") ReferenceParam thePlandefinitionReference, HttpServletResponse theServletResponse) throws IOException {
+    if (
+      thePlandefinitionReference == null ||
+        thePlandefinitionReference.getResourceType() == null ||
+        !thePlandefinitionReference.getResourceType().equals("PlanDefinition")) {
+      logger.error("$xes operation called with invalid resource type parameter.");
+      theServletResponse.setStatus(400);
+    } else {
+      theServletResponse.setStatus(200);
+      theServletResponse.setContentType("text/plain");
 
-    theServletResponse.getWriter().write(generateXES());
-    theServletResponse.getWriter().close();
+      theServletResponse.getWriter().write(generateXES(thePlandefinitionReference));
+      theServletResponse.getWriter().close();
+    }
   }
 
   /**
@@ -65,19 +67,9 @@ public class XESProvider implements IResourceProvider {
    *
    * @return XES XML file as plain text.
    */
-  private String generateXES() {
+  private String generateXES(ReferenceParam thePlandefinitionReference) {
 
     Map<String, List<AuditEvent>> tracesPerPatient = new HashMap<>();
-
-    //retrieve initially created plandefinition by using empty search parameter map
-    IBundleProvider allPlanDefinitions = myPlanDefinitionDao.search(new SearchParameterMap());
-    final PlanDefinition initiallyCreatedPlanDefinition;
-    if (allPlanDefinitions != null && !allPlanDefinitions.isEmpty() && allPlanDefinitions.size() > 0) {
-      initiallyCreatedPlanDefinition = (PlanDefinition) allPlanDefinitions.getResources(0, 1).get(0);
-    } else {
-      logger.error("Apparently no plandefinition has been created during initialization");
-      return "No Plan Definition found!";
-    }
 
     IBundleProvider search = myAuditEventDao.search(SearchParameterMap.newSynchronous());
     List<IBaseResource> resources = search.getResources(0, search.size());
@@ -88,9 +80,9 @@ public class XESProvider implements IResourceProvider {
         String caseId;
         if (
           event.hasExtension("https://fhirserver.com/extensions/auditevent-basedon") &&
-            ((Reference)event.getExtensionByUrl("https://fhirserver.com/extensions/auditevent-basedon").getValue()).getReference().equals("PlanDefinition/"+initiallyCreatedPlanDefinition.getIdElement().getIdPart()) &&
-          event.hasExtension("https://fhirserver.com/extensions/auditevent-encounter") &&
-          (caseId = ((Reference) event.getExtensionByUrl("https://fhirserver.com/extensions/auditevent-encounter").getValue()).getReference()) != null) {
+            ((Reference) event.getExtensionByUrl("https://fhirserver.com/extensions/auditevent-basedon").getValue()).getReference().equals("PlanDefinition/" + thePlandefinitionReference.getIdPart()) &&
+            event.hasExtension("https://fhirserver.com/extensions/auditevent-encounter") &&
+            (caseId = ((Reference) event.getExtensionByUrl("https://fhirserver.com/extensions/auditevent-encounter").getValue()).getReference()) != null) {
           if (!tracesPerPatient.containsKey(caseId)) {
             tracesPerPatient.put(caseId, new LinkedList<>());
           }
@@ -109,7 +101,7 @@ public class XESProvider implements IResourceProvider {
       "\t<extension name=\"Lifecycle\" prefix=\"lifecycle\" uri=\"http://www.xes-standard.org/lifecycle.xesext\"/>\n" +
       "\t<extension name=\"Concept\" prefix=\"concept\" uri=\"http://www.xes-standard.org/concept.xesext\"/>\n" +
       "\n" +
-      "\t<string key=\"concept:name\" value=\"PlanDefinition/"+initiallyCreatedPlanDefinition.getIdElement().getIdPart()+"\"/>\n" +
+      "\t<string key=\"concept:name\" value=\"PlanDefinition/" + thePlandefinitionReference.getIdPart() + "\"/>\n" +
       "\n" +
       tracesPerPatient.entrySet().stream().map(x -> trace(x.getKey(), x.getValue())).collect(Collectors.joining("\n")) +
       "</log>\n";
@@ -191,11 +183,11 @@ public class XESProvider implements IResourceProvider {
         break;
       case "E":
         if (x.getEntityFirstRep().getDetailFirstRep().getValue().toString().endsWith("$fhirToCDA")) {
-            event = "\t\t<event>\n" +
-              "\t\t\t<string key=\"concept:name\" value=\"Report Transmission\"/>\n" +
-              "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
-              "\t\t\t<date key=\"time:timestamp\" value=\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(x.getRecorded().toInstant().atZone(ZoneId.systemDefault())) + "\"/>\n" +
-              "\t\t</event>";
+          event = "\t\t<event>\n" +
+            "\t\t\t<string key=\"concept:name\" value=\"Report Transmission\"/>\n" +
+            "\t\t\t<string key=\"lifecycle:transition\" value=\"complete\"/>\n" +
+            "\t\t\t<date key=\"time:timestamp\" value=\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(x.getRecorded().toInstant().atZone(ZoneId.systemDefault())) + "\"/>\n" +
+            "\t\t</event>";
         }
         break;
     }
